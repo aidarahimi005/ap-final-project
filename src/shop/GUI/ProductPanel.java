@@ -1,4 +1,3 @@
-
 package shop.GUI;
 
 import shop.model.Product;
@@ -8,6 +7,7 @@ import shop.service.ProductService;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.File;
 
 public class ProductPanel extends JPanel {
     private JTable table;
@@ -15,6 +15,7 @@ public class ProductPanel extends JPanel {
     private ProductService productService;
     private CartService cartService;
     private User currentUser;
+    private JLabel imageLabel;
 
     public ProductPanel(ProductService productService, CartService cartService, User user) {
         this.productService = productService;
@@ -22,13 +23,31 @@ public class ProductPanel extends JPanel {
         this.currentUser = user;
         
         setLayout(new BorderLayout(10, 10));
+      
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         
         String[] columns = {"ID", "Name", "Price", "Stock", "Category"};
         model = new DefaultTableModel(columns, 0);
         table = new JTable(model);
         
-        add(new JScrollPane(table), BorderLayout.CENTER);
+   
+        JPanel imagePanel = new JPanel(new BorderLayout());
+        imageLabel = new JLabel("No Image", SwingConstants.CENTER);
+        imageLabel.setPreferredSize(new Dimension(150, 150));
+        imageLabel.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        imagePanel.add(imageLabel, BorderLayout.CENTER);
+      
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                showProductImage();
+            }
+        });
         
+        mainPanel.add(new JScrollPane(table), BorderLayout.CENTER);
+        mainPanel.add(imagePanel, BorderLayout.EAST);
+        
+        add(mainPanel, BorderLayout.CENTER);
+
         JPanel buttonPanel = new JPanel(new FlowLayout());
         
         if (currentUser.getRole().equals("ADMIN")) {
@@ -40,7 +59,11 @@ public class ProductPanel extends JPanel {
             addBtn.addActionListener(e -> addProduct());
             editBtn.addActionListener(e -> editProduct());
             deleteBtn.addActionListener(e -> deleteProduct());
-            refreshBtn.addActionListener(e -> loadData());
+            refreshBtn.addActionListener(e -> {
+                loadData();
+                imageLabel.setIcon(null);
+                imageLabel.setText("No Image");
+            });
             
             buttonPanel.add(addBtn);
             buttonPanel.add(editBtn);
@@ -51,7 +74,11 @@ public class ProductPanel extends JPanel {
             JButton refreshBtn = new JButton("Refresh");
             
             addToCartBtn.addActionListener(e -> addToCart());
-            refreshBtn.addActionListener(e -> loadData());
+            refreshBtn.addActionListener(e -> {
+                loadData();
+                imageLabel.setIcon(null);
+                imageLabel.setText("No Image");
+            });
             
             buttonPanel.add(addToCartBtn);
             buttonPanel.add(refreshBtn);
@@ -60,6 +87,32 @@ public class ProductPanel extends JPanel {
         add(buttonPanel, BorderLayout.SOUTH);
         
         loadData();
+    }
+    
+    private void showProductImage() {
+        int row = table.getSelectedRow();
+        if (row != -1) {
+            String id = (String) model.getValueAt(row, 0);
+            Product product = productService.getAllProducts().stream()
+                    .filter(p -> p.getId().equals(id)).findFirst().orElse(null);
+            
+            if (product != null && product.getImagePath() != null && 
+                !product.getImagePath().equals("null")) {
+                File imageFile = new File(product.getImagePath());
+                if (imageFile.exists()) {
+                    ImageIcon icon = new ImageIcon(product.getImagePath());
+                    Image img = icon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
+                    imageLabel.setIcon(new ImageIcon(img));
+                    imageLabel.setText("");
+                } else {
+                    imageLabel.setIcon(null);
+                    imageLabel.setText("Image not found");
+                }
+            } else {
+                imageLabel.setIcon(null);
+                imageLabel.setText("No Image");
+            }
+        }
     }
     
     private void loadData() {
@@ -80,12 +133,14 @@ public class ProductPanel extends JPanel {
         JTextField priceField = new JTextField();
         JTextField stockField = new JTextField();
         JTextField categoryField = new JTextField();
+        JTextField imageField = new JTextField();
         
         Object[] fields = {
             "Name:", nameField,
             "Price:", priceField,
             "Stock:", stockField,
-            "Category:", categoryField
+            "Category:", categoryField,
+            "Image path (optional):", imageField
         };
         
         int result = JOptionPane.showConfirmDialog(this, fields, 
@@ -97,8 +152,9 @@ public class ProductPanel extends JPanel {
                 double price = Double.parseDouble(priceField.getText());
                 int stock = Integer.parseInt(stockField.getText());
                 String category = categoryField.getText();
+                String imagePath = imageField.getText().trim().isEmpty() ? null : imageField.getText();
                 
-                productService.addProduct(name, price, stock, category, null);
+                productService.addProduct(name, price, stock, category, imagePath);
                 loadData();
                 JOptionPane.showMessageDialog(this, "Product added");
                 
@@ -125,12 +181,14 @@ public class ProductPanel extends JPanel {
         JTextField priceField = new JTextField(String.valueOf(product.getPrice()));
         JTextField stockField = new JTextField(String.valueOf(product.getStock()));
         JTextField categoryField = new JTextField(product.getCategory());
+        JTextField imageField = new JTextField(product.getImagePath() != null ? product.getImagePath() : "");
         
         Object[] fields = {
             "Name:", nameField,
             "Price:", priceField,
             "Stock:", stockField,
-            "Category:", categoryField
+            "Category:", categoryField,
+            "Image path:", imageField
         };
         
         int result = JOptionPane.showConfirmDialog(this, fields, 
@@ -142,9 +200,10 @@ public class ProductPanel extends JPanel {
                 double price = Double.parseDouble(priceField.getText());
                 int stock = Integer.parseInt(stockField.getText());
                 String category = categoryField.getText();
+                String imagePath = imageField.getText().trim().isEmpty() ? null : imageField.getText();
                 
                 Product updated = new Product(
-                    product.getId(), name, price, stock, category, product.getImagePath()
+                    product.getId(), name, price, stock, category, imagePath
                 );
                 
                 productService.updateProduct(updated);
